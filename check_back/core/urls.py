@@ -31,11 +31,18 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 
+
+def handle_home_request(request):
+    from django.shortcuts import redirect
+    redirect_url = '/api/docs/'
+    return redirect(redirect_url)
+
 urlpatterns = [
 
     path('admin/', admin.site.urls),
+    path('', handle_home_request, name='home'),
 
-    # include documentation lock
+    # include documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),

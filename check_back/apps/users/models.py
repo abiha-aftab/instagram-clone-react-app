@@ -56,7 +56,7 @@ class User(AbstractUser):
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    nickname = models.CharField(max_length=50, blank=True)
+    nickname = models.CharField(max_length=50)
     bio = models.TextField(blank=True)
     profile_image = CloudinaryField('profile_image', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
