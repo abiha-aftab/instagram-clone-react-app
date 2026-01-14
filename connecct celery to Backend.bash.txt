@@ -1,0 +1,5 @@
+celery -A myproject beat -l info
+
+
+# Single threaded worker (for Windows)
+celery -A core worker -l info --pool=solo
