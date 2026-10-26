@@ -1,12 +1,10 @@
-from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
-# Create your views here.
 
-
+from core.permissions import IsOwnerOrReadOnly
 from .models import Post, Like, Comment
 from .serializers import PostSerializer, LikeSerializer, CommentSerializer
 
@@ -14,12 +12,12 @@ from .serializers import PostSerializer, LikeSerializer, CommentSerializer
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all().order_by('-created_at')
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
     
-    @action(detail=True, methods=['post'], url_path='like')
+    @action(detail=True, methods=['post'], url_path='like', permission_classes=[IsAuthenticated])
     def like_post(self, request, pk=None):
         """Like a post"""
         post = self.get_object()
@@ -28,7 +26,7 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response({'message': 'Post liked successfully'}, status=status.HTTP_201_CREATED)
         return Response({'message': 'You have already liked this post'}, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=True, methods=['post'], url_path='unlike')
+    @action(detail=True, methods=['post'], url_path='unlike', permission_classes=[IsAuthenticated])
     def unlike_post(self, request, pk=None):
         """Unlike a post"""
         post = self.get_object()
@@ -62,12 +60,9 @@ class OwnPostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Post.objects.filter(user=self.request.user).order_by('-created_at')
-    
+
     def perform_create(self, serializer):
-        user = self.request.user
-        if user is None or not user.is_authenticated:
-            raise PermissionDenied("Authentication credentials were not provided.") 
-        serializer.save(user=user)
+        serializer.save(user=self.request.user)
 
 
 class LikeViewSet(viewsets.ModelViewSet):
@@ -96,7 +91,7 @@ class LikeViewSet(viewsets.ModelViewSet):
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all().order_by('-created_at')
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     
     def get_queryset(self):
         queryset = Comment.objects.all().select_related('user', 'post', 'parent')
@@ -116,18 +111,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
     
-    def update(self, request, *args, **kwargs):
-        comment = self.get_object()
-        if comment.user != request.user:
-            raise PermissionDenied("You can only edit your own comments.")
-        return super().update(request, *args, **kwargs)
-    
-    def destroy(self, request, *args, **kwargs):
-        comment = self.get_object()
-        if comment.user != request.user:
-            raise PermissionDenied("You can only delete your own comments.")
-        return super().destroy(request, *args, **kwargs)
-    
+
     @action(detail=True, methods=['get'], url_path='replies')
     def get_replies(self, request, pk=None):
         """Get all replies for a comment"""

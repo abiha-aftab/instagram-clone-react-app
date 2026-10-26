@@ -60,6 +60,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['id', 'user', 'nickname', 'bio', 'profile_image', 'created_at']
+        read_only_fields = ['user', 'created_at']
  
 
 class FollowSerializer(serializers.ModelSerializer):

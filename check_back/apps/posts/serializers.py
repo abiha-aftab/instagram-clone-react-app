@@ -75,9 +75,17 @@ class CommentSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         validated_data['user'] = request.user
         return Comment.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        # A comment can be reworded, never moved to another post or thread.
+        validated_data.pop('post', None)
+        validated_data.pop('parent', None)
+        return super().update(instance, validated_data)
     
     def validate(self, data):
         # Ensure parent comment belongs to the same post
+        if self.instance is not None:
+            return data
         parent = data.get('parent')
         post = data.get('post')
         if parent and parent.post != post:
