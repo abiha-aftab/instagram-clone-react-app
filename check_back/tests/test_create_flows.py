@@ -3,6 +3,7 @@ import pytest
 from apps.notifications.models import Notification
 from apps.posts.models import Post
 from apps.stories.models import Story
+from apps.users.models import Follow
 
 
 @pytest.mark.django_db
@@ -47,12 +48,14 @@ def test_like_notifies_author_but_not_self(auth_client, make_user):
     author = make_user()
     post = Post.objects.create(user=author, title='Hello', caption='x')
 
+    likes = Notification.objects.filter(notification_type=Notification.Type.LIKE)
     auth_client(author).post(f'/api/posts/posts/{post.id}/like/')
-    assert Notification.objects.count() == 0
+    assert likes.count() == 0
 
     fan = auth_client()
+    Follow.objects.create(follower=fan.user, following=author)
     assert fan.post(f'/api/posts/posts/{post.id}/like/').status_code == 201
-    notification = Notification.objects.get()
+    notification = likes.get()
     assert (notification.from_user, notification.to_user) == (fan.user, author)
 
 

@@ -3,11 +3,15 @@ import pytest
 from apps.notifications.models import Notification
 from apps.posts.models import Comment, Post
 from apps.stories.models import Story
+from apps.users.models import Follow
 
 
 @pytest.fixture
 def owner_and_intruder(auth_client):
-    return auth_client(), auth_client()
+    owner, intruder = auth_client(), auth_client()
+    # The intruder follows the owner, so they can see the content they try to change.
+    Follow.objects.create(follower=intruder.user, following=owner.user)
+    return owner, intruder
 
 
 @pytest.fixture

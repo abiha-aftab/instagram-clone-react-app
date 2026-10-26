@@ -3,6 +3,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from apps.posts.models import Comment, Like, Post
+from apps.users.models import Follow
 
 
 def count_queries(client, url):
@@ -24,6 +25,7 @@ def add_posts(author, fans, n):
 def test_feed_query_count_does_not_grow_with_posts(auth_client, make_user):
     viewer = auth_client()
     author, fans = make_user(), [make_user(), make_user()]
+    Follow.objects.create(follower=viewer.user, following=author)
 
     add_posts(author, fans, 2)
     small, _ = count_queries(viewer, '/api/posts/posts/')
@@ -39,7 +41,9 @@ def test_feed_query_count_does_not_grow_with_posts(auth_client, make_user):
 @pytest.mark.django_db
 def test_is_liked_reflects_the_viewer(auth_client, make_user):
     viewer = auth_client()
-    post = Post.objects.create(user=make_user(), title='Hi', caption='x')
+    author = make_user()
+    Follow.objects.create(follower=viewer.user, following=author)
+    post = Post.objects.create(user=author, title='Hi', caption='x')
     Like.objects.create(user=viewer.user, post=post)
     assert viewer.get(f'/api/posts/posts/{post.id}/').data['is_liked'] is True
 

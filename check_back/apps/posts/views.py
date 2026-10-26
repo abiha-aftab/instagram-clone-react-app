@@ -6,7 +6,7 @@ from rest_framework.response import Response
 
 from core.permissions import IsOwnerOrReadOnly
 from .models import Comment, Like, Post
-from .queries import comments_with_replies, posts_with_stats
+from .queries import comments_with_replies, posts_with_stats, published_filter, visible_posts
 from .serializers import CommentSerializer, LikeSerializer, PostSerializer
 
 
@@ -22,7 +22,11 @@ class PostViewSet(PaginatedActionsMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
-        return posts_with_stats(self.request.user)
+        queryset = visible_posts(self.request.user)
+        if self.action == 'list':
+            # The feed shows scheduled posts only once their time has come.
+            queryset = queryset.filter(published_filter())
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

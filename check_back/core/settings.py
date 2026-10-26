@@ -179,6 +179,12 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+CELERY_BEAT_SCHEDULE = {
+    'purge-expired-stories': {
+        'task': 'apps.stories.tasks.purge_expired_stories',
+        'schedule': timedelta(minutes=15),
+    },
+}
 
 # Web push is skipped entirely unless a VAPID key is configured.
 WEBPUSH_SETTINGS = {

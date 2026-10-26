@@ -23,6 +23,7 @@ class PostSerializer(serializers.ModelSerializer):
     likes_count = serializers.IntegerField(read_only=True, default=0)
     comments_count = serializers.IntegerField(read_only=True, default=0)
     is_liked = serializers.BooleanField(read_only=True, default=False)
+    is_published = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -30,7 +31,10 @@ class PostSerializer(serializers.ModelSerializer):
             'id', 'title', 'user', 'author', 'caption', 'image', 'scheduled_for', 'created_at',
             'is_published', 'likes_count', 'comments_count', 'is_liked',
         ]
-        read_only_fields = ['id', 'user', 'created_at', 'is_published']
+        read_only_fields = ['id', 'user', 'created_at']
+
+    def get_is_published(self, obj):
+        return obj.scheduled_for is None or obj.scheduled_for <= timezone.now()
 
     def validate_scheduled_for(self, value):
         if value and value < timezone.now():
