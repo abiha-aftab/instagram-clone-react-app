@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+*.sqlite3
+media/
+staticfiles/
+__pycache__/
+.pytest_cache/
+Test Project.pdf
+Dockerfile
+.dockerignore
