@@ -1,13 +1,12 @@
 from datetime import timedelta
 from django.db import models
-from cloudinary.models import CloudinaryField
 # Create your models here.
 class Story(models.Model):
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='stories')    
     title = models.CharField(max_length=200)
     content = models.TextField()
     
-    media = CloudinaryField('media', blank=True, null=True)
+    media = models.FileField(upload_to='stories/', max_length=255, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()

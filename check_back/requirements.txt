@@ -1,0 +1,16 @@
+Django==5.2.19
+djangorestframework==3.18.3
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-celery-beat==2.9.0
+drf-spectacular==0.30.0
+celery==5.7.0
+redis==8.1.0
+python-dotenv==1.2.4
+pywebpush==2.5.0
+psycopg[binary]==3.3.8
+Pillow==13.0.0
+# Only loaded when CLOUDINARY_URL is set; the old migrations still import cloudinary.models.
+cloudinary==1.47.0
+django-cloudinary-storage==0.3.0
+gunicorn==27.0.0

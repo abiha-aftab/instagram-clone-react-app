@@ -1,6 +1,5 @@
 from django.db import models
 from django.core.validators import MinLengthValidator as Mi
-from cloudinary.models import CloudinaryField
 from django.utils import timezone
 # Create your models here.
 
@@ -13,7 +12,7 @@ class Post(models.Model):
     title = models.CharField(max_length=255, validators=[Mi(2)])
     user = models.ForeignKey('users.User', on_delete=models.CASCADE)
     caption = models.TextField()
-    image = CloudinaryField('media', blank=True, null=True)
+    image = models.ImageField(upload_to='posts/', max_length=255, blank=True, null=True)
     scheduled_for = models.DateTimeField(null=True, blank=True, validators=[validate_scheduled_for])
     created_at = models.DateTimeField(auto_now_add=True)
     is_published = models.BooleanField(default=False)
