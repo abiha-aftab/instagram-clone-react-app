@@ -111,4 +111,4 @@ def test_push_subscriptions_are_per_user(owner_and_intruder):
     owner, intruder = owner_and_intruder
     payload = {'endpoint': 'https://push.example.com/abc', 'p256dh': 'k', 'auth': 'a'}
     assert owner.post('/api/notifications/push-subscriptions/', payload, format='json').status_code == 201
-    assert intruder.get('/api/notifications/push-subscriptions/').data == []
+    assert intruder.get('/api/notifications/push-subscriptions/').data['count'] == 0

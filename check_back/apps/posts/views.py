@@ -41,17 +41,20 @@ class PostViewSet(viewsets.ModelViewSet):
     def get_likes(self, request, pk=None):
         """Get all likes for a post"""
         post = self.get_object()
-        likes = Like.objects.filter(post=post).select_related('user')
-        serializer = LikeSerializer(likes, many=True, context={'request': request})
-        return Response(serializer.data)
+        likes = Like.objects.filter(post=post).select_related('user').order_by('-created_at')
+        return self._paginated(likes, LikeSerializer)
     
     @action(detail=True, methods=['get'], url_path='comments')
     def get_comments(self, request, pk=None):
         """Get all top-level comments for a post"""
         post = self.get_object()
         comments = Comment.objects.filter(post=post, parent=None).order_by('created_at')
-        serializer = CommentSerializer(comments, many=True, context={'request': request})
-        return Response(serializer.data)
+        return self._paginated(comments, CommentSerializer)
+
+    def _paginated(self, queryset, serializer_class):
+        page = self.paginate_queryset(queryset)
+        serializer = serializer_class(page, many=True, context=self.get_serializer_context())
+        return self.get_paginated_response(serializer.data)
 
 
 class OwnPostViewSet(viewsets.ModelViewSet):
