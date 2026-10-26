@@ -1,15 +1,17 @@
-# serializers for Notification model
-
 from rest_framework import serializers
 from .models import Notification, PushSubscription
 
+
 class NotificationSerializer(serializers.ModelSerializer):
+    from_username = serializers.CharField(source='from_user.username', read_only=True)
+
     class Meta:
         model = Notification
-        fields = ['id', 'from_user', 'to_user', 'message', 'is_read', 'created_at','notification_type']
-        read_only_fields = ['from_user', 'to_user', 'message', 'created_at', 'notification_type']
-
-
+        fields = [
+            'id', 'from_user', 'from_username', 'to_user', 'message', 'is_read', 'created_at',
+            'notification_type', 'target_post',
+        ]
+        read_only_fields = ['from_user', 'to_user', 'message', 'created_at', 'notification_type', 'target_post']
 
 
 class PushSubscriptionSerializer(serializers.ModelSerializer):
