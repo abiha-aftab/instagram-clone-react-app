@@ -1,31 +1,38 @@
-from rest_framework import serializers
 from django.utils import timezone
-from .models import Post, Like, Comment
+from rest_framework import serializers
+
+from .models import Comment, Like, Post
+
+
+class AuthorSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    avatar = serializers.SerializerMethodField()
+
+    def get_avatar(self, user):
+        profile = getattr(user, 'profile', None)
+        if not profile or not profile.profile_image:
+            return None
+        request = self.context.get('request')
+        url = profile.profile_image.url
+        return request.build_absolute_uri(url) if request else url
+
 
 class PostSerializer(serializers.ModelSerializer):
-    likes_count = serializers.SerializerMethodField()
-    comments_count = serializers.SerializerMethodField()
-    is_liked = serializers.SerializerMethodField()
-    
+    author = AuthorSerializer(source='user', read_only=True)
+    likes_count = serializers.IntegerField(read_only=True, default=0)
+    comments_count = serializers.IntegerField(read_only=True, default=0)
+    is_liked = serializers.BooleanField(read_only=True, default=False)
+
     class Meta:
         model = Post
-        fields = ['id', 'title', 'user', 'caption', 'image', 'scheduled_for', 'created_at', 'is_published', 'likes_count', 'comments_count', 'is_liked']
+        fields = [
+            'id', 'title', 'user', 'author', 'caption', 'image', 'scheduled_for', 'created_at',
+            'is_published', 'likes_count', 'comments_count', 'is_liked',
+        ]
         read_only_fields = ['id', 'user', 'created_at', 'is_published']
 
-    def get_likes_count(self, obj):
-        return Like.objects.filter(post=obj).count()
-    
-    def get_comments_count(self, obj):
-        return Comment.objects.filter(post=obj).count()
-    
-    def get_is_liked(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return Like.objects.filter(post=obj, user=request.user).exists()
-        return False
-
     def validate_scheduled_for(self, value):
-        """Ensure scheduled_for is in the future."""
         if value and value < timezone.now():
             raise serializers.ValidationError("Scheduled time must be in the future.")
         return value
@@ -33,47 +40,55 @@ class PostSerializer(serializers.ModelSerializer):
 
 class LikeSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
-    
+
     class Meta:
         model = Like
         fields = ['id', 'user', 'username', 'post', 'created_at']
         read_only_fields = ['id', 'user', 'created_at']
-    
+
     def create(self, validated_data):
-        request = self.context.get('request')
-        user = request.user
-        post = validated_data.get('post')
-        
-        # Check if already liked
-        like, created = Like.objects.get_or_create(user=user, post=post)
+        user = self.context['request'].user
+        like, created = Like.objects.get_or_create(user=user, post=validated_data['post'])
         if not created:
             raise serializers.ValidationError("You have already liked this post.")
         return like
+
+
+class ReplySerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = ['id', 'user', 'username', 'post', 'text', 'parent', 'created_at', 'updated_at']
+        read_only_fields = fields
 
 
 class CommentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     replies = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Comment
-        fields = ['id', 'user', 'username', 'post', 'text', 'parent', 'created_at', 'updated_at', 'replies', 'replies_count']
+        fields = [
+            'id', 'user', 'username', 'post', 'text', 'parent', 'created_at', 'updated_at',
+            'replies', 'replies_count',
+        ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
-    
+
     def get_replies(self, obj):
-        # Only return direct replies, not nested
-        if obj.parent is None:
-            replies = Comment.objects.filter(parent=obj).order_by('created_at')
-            return CommentSerializer(replies, many=True, context=self.context).data
-        return []
-    
+        # Replies are one level deep, so a reply never has replies of its own.
+        if obj.parent_id is not None:
+            return []
+        return ReplySerializer(obj.replies.all(), many=True, context=self.context).data
+
     def get_replies_count(self, obj):
-        return Comment.objects.filter(parent=obj).count()
-    
+        if obj.parent_id is not None:
+            return 0
+        return len(obj.replies.all())
+
     def create(self, validated_data):
-        request = self.context.get('request')
-        validated_data['user'] = request.user
+        validated_data['user'] = self.context['request'].user
         return Comment.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
@@ -81,13 +96,13 @@ class CommentSerializer(serializers.ModelSerializer):
         validated_data.pop('post', None)
         validated_data.pop('parent', None)
         return super().update(instance, validated_data)
-    
+
     def validate(self, data):
-        # Ensure parent comment belongs to the same post
         if self.instance is not None:
             return data
         parent = data.get('parent')
-        post = data.get('post')
-        if parent and parent.post != post:
+        if parent and parent.post_id != data['post'].id:
             raise serializers.ValidationError("Parent comment must belong to the same post.")
+        if parent and parent.parent_id is not None:
+            raise serializers.ValidationError("Replies can only be one level deep.")
         return data

@@ -1,60 +1,59 @@
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from core.permissions import IsOwnerOrReadOnly
-from .models import Post, Like, Comment
-from .serializers import PostSerializer, LikeSerializer, CommentSerializer
+from .models import Comment, Like, Post
+from .queries import comments_with_replies, posts_with_stats
+from .serializers import CommentSerializer, LikeSerializer, PostSerializer
 
 
-class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all().order_by('-created_at')
-    serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-    
-    @action(detail=True, methods=['post'], url_path='like', permission_classes=[IsAuthenticated])
-    def like_post(self, request, pk=None):
-        """Like a post"""
-        post = self.get_object()
-        like, created = Like.objects.get_or_create(user=request.user, post=post)
-        if created:
-            return Response({'message': 'Post liked successfully'}, status=status.HTTP_201_CREATED)
-        return Response({'message': 'You have already liked this post'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'], url_path='unlike', permission_classes=[IsAuthenticated])
-    def unlike_post(self, request, pk=None):
-        """Unlike a post"""
-        post = self.get_object()
-        try:
-            like = Like.objects.get(user=request.user, post=post)
-            like.delete()
-            return Response({'message': 'Post unliked successfully'}, status=status.HTTP_200_OK)
-        except Like.DoesNotExist:
-            return Response({'message': 'You have not liked this post'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['get'], url_path='likes')
-    def get_likes(self, request, pk=None):
-        """Get all likes for a post"""
-        post = self.get_object()
-        likes = Like.objects.filter(post=post).select_related('user').order_by('-created_at')
-        return self._paginated(likes, LikeSerializer)
-    
-    @action(detail=True, methods=['get'], url_path='comments')
-    def get_comments(self, request, pk=None):
-        """Get all top-level comments for a post"""
-        post = self.get_object()
-        comments = Comment.objects.filter(post=post, parent=None).order_by('created_at')
-        return self._paginated(comments, CommentSerializer)
-
-    def _paginated(self, queryset, serializer_class):
+class PaginatedActionsMixin:
+    def paginated_response(self, queryset, serializer_class):
         page = self.paginate_queryset(queryset)
         serializer = serializer_class(page, many=True, context=self.get_serializer_context())
         return self.get_paginated_response(serializer.data)
+
+
+class PostViewSet(PaginatedActionsMixin, viewsets.ModelViewSet):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+
+    def get_queryset(self):
+        return posts_with_stats(self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='like', permission_classes=[IsAuthenticated])
+    def like_post(self, request, pk=None):
+        post = self.get_object()
+        _, created = Like.objects.get_or_create(user=request.user, post=post)
+        if created:
+            return Response({'message': 'Post liked successfully'}, status=status.HTTP_201_CREATED)
+        return Response({'message': 'You have already liked this post'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='unlike', permission_classes=[IsAuthenticated])
+    def unlike_post(self, request, pk=None):
+        post = self.get_object()
+        deleted, _ = Like.objects.filter(user=request.user, post=post).delete()
+        if deleted:
+            return Response({'message': 'Post unliked successfully'}, status=status.HTTP_200_OK)
+        return Response({'message': 'You have not liked this post'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['get'], url_path='likes')
+    def get_likes(self, request, pk=None):
+        post = self.get_object()
+        likes = Like.objects.filter(post=post).select_related('user').order_by('-created_at')
+        return self.paginated_response(likes, LikeSerializer)
+
+    @action(detail=True, methods=['get'], url_path='comments')
+    def get_comments(self, request, pk=None):
+        post = self.get_object()
+        comments = comments_with_replies().filter(post=post, parent=None).order_by('created_at')
+        return self.paginated_response(comments, CommentSerializer)
 
 
 class OwnPostViewSet(viewsets.ModelViewSet):
@@ -62,64 +61,54 @@ class OwnPostViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Post.objects.filter(user=self.request.user).order_by('-created_at')
+        return posts_with_stats(self.request.user).filter(user=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
 
 class LikeViewSet(viewsets.ModelViewSet):
-    queryset = Like.objects.all().order_by('-created_at')
     serializer_class = LikeSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'delete']
-    
+
     def get_queryset(self):
-        queryset = Like.objects.all().select_related('user', 'post')
-        post_id = self.request.query_params.get('post', None)
+        queryset = Like.objects.select_related('user')
+        post_id = self.request.query_params.get('post')
         if post_id:
             queryset = queryset.filter(post_id=post_id)
         return queryset.order_by('-created_at')
-    
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-    
-    def destroy(self, request, *args, **kwargs):
-        like = self.get_object()
-        if like.user != request.user:
+
+    def perform_destroy(self, instance):
+        if instance.user_id != self.request.user.id:
             raise PermissionDenied("You can only delete your own likes.")
-        return super().destroy(request, *args, **kwargs)
+        instance.delete()
 
 
-class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all().order_by('-created_at')
+class CommentViewSet(PaginatedActionsMixin, viewsets.ModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
-    
+
     def get_queryset(self):
-        queryset = Comment.objects.all().select_related('user', 'post', 'parent')
-        post_id = self.request.query_params.get('post', None)
-        parent_id = self.request.query_params.get('parent', None)
-        
+        queryset = comments_with_replies()
+        post_id = self.request.query_params.get('post')
+        parent_id = self.request.query_params.get('parent')
         if post_id:
             queryset = queryset.filter(post_id=post_id)
         if parent_id:
             queryset = queryset.filter(parent_id=parent_id)
-        elif parent_id is None and post_id:
-            # Only top-level comments
+        elif post_id:
             queryset = queryset.filter(parent=None)
-        
         return queryset.order_by('created_at')
-    
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-    
 
     @action(detail=True, methods=['get'], url_path='replies')
     def get_replies(self, request, pk=None):
-        """Get all replies for a comment"""
         comment = self.get_object()
-        replies = Comment.objects.filter(parent=comment).order_by('created_at')
-        serializer = CommentSerializer(replies, many=True, context={'request': request})
-        return Response(serializer.data)
-
+        replies = comments_with_replies().filter(parent=comment).order_by('created_at')
+        return self.paginated_response(replies, CommentSerializer)
