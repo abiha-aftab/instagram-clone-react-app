@@ -1,82 +1,101 @@
 import { useState } from 'react';
-import { postAPI } from '../api';
-import { formatRelativeTime, getImageUrl } from '../utils/helpers';
-import { useAuth } from '../context/AuthContext';
+import { errorMessage, postAPI } from '../api';
+import { useAuth } from '../hooks/useAuth';
+import { formatRelativeTime, plural } from '../lib/format';
 import CommentSection from './CommentSection';
-import './PostCard.css';
 
-const PostCard = ({ post, onUpdate }) => {
-  const { user: currentUser } = useAuth();
-  const [isLiked, setIsLiked] = useState(post.is_liked);
-  const [likeCount, setLikeCount] = useState(post.like_count);
+export default function PostCard({ post, onDeleted }) {
+  const { user } = useAuth();
+  const [liked, setLiked] = useState(post.is_liked);
+  const [likes, setLikes] = useState(post.likes_count);
+  const [busy, setBusy] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [error, setError] = useState('');
+  const isOwner = user?.id === post.author.id;
 
-  const handleLike = async () => {
+  async function toggleLike() {
+    setBusy(true);
+    setError('');
+    const next = !liked;
+    setLiked(next);
+    setLikes((count) => count + (next ? 1 : -1));
     try {
-      if (isLiked) {
-        await postAPI.unlikePost(post.id);
-        setIsLiked(false);
-        setLikeCount(prev => prev - 1);
-      } else {
-        await postAPI.likePost(post.id);
-        setIsLiked(true);
-        setLikeCount(prev => prev + 1);
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
+      await (next ? postAPI.like(post.id) : postAPI.unlike(post.id));
+    } catch (err) {
+      setLiked(!next);
+      setLikes((count) => count + (next ? -1 : 1));
+      setError(errorMessage(err, 'Could not update your like.'));
+    } finally {
+      setBusy(false);
     }
-  };
+  }
+
+  async function deletePost() {
+    if (!window.confirm('Delete this post?')) return;
+    try {
+      await postAPI.remove(post.id);
+      onDeleted(post.id);
+    } catch (err) {
+      setError(errorMessage(err, 'Could not delete the post.'));
+    }
+  }
 
   return (
-    <div className="post-card">
-      <div className="post-header">
-        <div className="post-user-info">
-          <img 
-            src={getImageUrl(post.user.profile_picture) || '/default-avatar.png'}
-            alt={post.user.username}
-            className="post-avatar"
-          />
-          <span className="post-username">{post.user.username}</span>
+    <article className="print" aria-labelledby={`post-${post.id}-title`}>
+      <header className="print-head">
+        <span className="avatar" aria-hidden="true">
+          {post.author.username[0].toUpperCase()}
+        </span>
+        <div>
+          <p className="print-author">{post.author.username}</p>
+          <p className="muted small">
+            <time dateTime={post.created_at}>{formatRelativeTime(post.created_at)}</time>
+          </p>
         </div>
-        <div className="post-time">{formatRelativeTime(post.created_at)}</div>
-      </div>
+        {isOwner && (
+          <button type="button" className="btn btn-quiet btn-danger" onClick={deletePost}>
+            Delete
+          </button>
+        )}
+      </header>
 
-      <div className="post-image-container">
-        <img 
-          src={getImageUrl(post.image)}
-          alt="Post"
-          className="post-image"
-        />
-      </div>
-
-      <div className="post-actions">
-        <button 
-          className={`action-button ${isLiked ? 'liked' : ''}`}
-          onClick={handleLike}
-        >
-          {isLiked ? '❤️' : '🤍'} {likeCount}
-        </button>
-        
-        <button 
-          className="action-button"
-          onClick={() => setShowComments(!showComments)}
-        >
-          💬 {post.comment_count}
-        </button>
-      </div>
-
-      {post.caption && (
-        <div className="post-caption">
-          <span className="caption-username">{post.user.username}</span>
-          <span className="caption-text">{post.caption}</span>
-        </div>
+      {post.image && (
+        <img className="print-photo" src={post.image} alt={post.caption || post.title} loading="lazy" />
       )}
 
-      {showComments && (
-        <CommentSection postId={post.id} />
-      )}
-    </div>
+      <div className="print-body">
+        <h3 id={`post-${post.id}-title`} className="print-title">
+          {post.title}
+        </h3>
+        {post.caption && <p>{post.caption}</p>}
+
+        <div className="print-actions">
+          <button
+            type="button"
+            className={`btn btn-like${liked ? ' is-liked' : ''}`}
+            aria-pressed={liked}
+            onClick={toggleLike}
+            disabled={busy}
+          >
+            {liked ? 'Liked' : 'Like'}
+          </button>
+          <span className="muted small">{plural(likes, 'like')}</span>
+          <button
+            type="button"
+            className="btn btn-quiet"
+            aria-expanded={showComments}
+            onClick={() => setShowComments((open) => !open)}
+          >
+            {plural(post.comments_count, 'comment')}
+          </button>
+        </div>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        {showComments && <CommentSection postId={post.id} />}
+      </div>
+    </article>
   );
-};
-
-export default PostCard;
+}

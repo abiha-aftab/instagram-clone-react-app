@@ -1,84 +1,72 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { postAPI } from '../api';
-import PostCard from '../components/PostCard';
 import CreatePost from '../components/CreatePost';
+import PostCard from '../components/PostCard';
 import StoryBar from '../components/StoryBar';
-import './Home.css';
+import { usePagedList } from '../hooks/usePagedList';
 
-const Home = () => {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showCreatePost, setShowCreatePost] = useState(false);
+export default function Home() {
+  const fetchPage = useCallback((page) => postAPI.feed(page), []);
+  const { items: posts, setItems, hasMore, status, loadMore, reload } = usePagedList(fetchPage);
+  const [composing, setComposing] = useState(false);
+  const [notice, setNotice] = useState('');
 
-  useEffect(() => {
-    fetchFeed();
-  }, []);
-
-  const fetchFeed = async () => {
-    try {
-      setLoading(true);
-      const response = await postAPI.getFeed();
-      setPosts(response.data.results || response.data);
-      setError('');
-    } catch (err) {
-      setError('Failed to load feed');
-      console.error('Error fetching feed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePostCreated = () => {
-    setShowCreatePost(false);
-    fetchFeed();
-  };
-
-  if (loading) {
-    return (
-      <div className="home-container">
-        <div className="loading">Loading feed...</div>
-      </div>
-    );
+  function handleCreated(post) {
+    setComposing(false);
+    setNotice(post.is_published ? '' : 'Scheduled. It will appear in the feed at the time you picked.');
+    reload();
   }
 
+  const removePost = (id) => setItems((current) => current.filter((post) => post.id !== id));
+
   return (
-    <div className="home-container">
-      <div className="feed-content">
-        <StoryBar />
-        
-        <div className="create-post-trigger">
-          <button 
-            onClick={() => setShowCreatePost(true)}
-            className="create-post-button"
-          >
-            + Create New Post
+    <>
+      <StoryBar />
+
+      <div className="feed-head">
+        <h1>Your feed</h1>
+        <button type="button" className="btn btn-primary" onClick={() => setComposing(true)}>
+          New post
+        </button>
+      </div>
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+        </p>
+      )}
+
+      {status === 'error' && (
+        <div className="empty" role="alert">
+          <p>The feed could not be loaded.</p>
+          <button type="button" className="btn" onClick={reload}>
+            Try again
           </button>
         </div>
-
-        {error && <div className="error-message">{error}</div>}
-
-        <div className="posts-list">
-          {posts.length === 0 ? (
-            <div className="no-posts">
-              <p>No posts yet. Follow people to see their posts!</p>
-            </div>
-          ) : (
-            posts.map((post) => (
-              <PostCard key={post.id} post={post} onUpdate={fetchFeed} />
-            ))
-          )}
+      )}
+      {status === 'ready' && posts.length === 0 && (
+        <div className="empty">
+          <p>Nothing here yet. Share a photo, or find people to follow.</p>
         </div>
+      )}
+
+      <div className="feed">
+        {posts.map((post) => (
+          <PostCard key={post.id} post={post} onDeleted={removePost} />
+        ))}
       </div>
 
-      {showCreatePost && (
-        <CreatePost 
-          onClose={() => setShowCreatePost(false)}
-          onSuccess={handlePostCreated}
-        />
+      {status === 'loading' && (
+        <p className="page-status" role="status">
+          Loading posts…
+        </p>
       )}
-    </div>
-  );
-};
+      {hasMore && status === 'ready' && (
+        <button type="button" className="btn btn-wide" onClick={loadMore}>
+          Load more
+        </button>
+      )}
 
-export default Home;
+      {composing && <CreatePost onClose={() => setComposing(false)} onCreated={handleCreated} />}
+    </>
+  );
+}

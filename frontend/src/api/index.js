@@ -1,64 +1,47 @@
-import api from './axios';
+import api from './client';
 
-// Authentication
 export const authAPI = {
-  register: (data) => api.post('/users/register/', data),
-  login: (data) => api.post('/auth/login/', data),
-  refresh: (refreshToken) => api.post('/auth/refresh/', { refresh: refreshToken }),
-  verify: (token) => api.post('/auth/verify/', { token }),
+  login: (credentials) => api.post('/token/', credentials),
+  register: (data) => api.post('/users/users/', data),
+  me: () => api.get('/users/users/me/'),
 };
 
-// Users
 export const userAPI = {
-  getProfile: () => api.get('/users/profile/'),
-  updateProfile: (data) => api.put('/users/profile/', data),
-  getUserByUsername: (username) => api.get(`/users/profile/${username}/`),
-  searchUsers: (query) => api.get(`/users/search/?q=${query}`),
-  followUser: (username) => api.post(`/users/follow/${username}/`),
-  unfollowUser: (username) => api.delete(`/users/unfollow/${username}/`),
-  getFollowers: (username) => api.get(`/users/${username}/followers/`),
-  getFollowing: (username) => api.get(`/users/${username}/following/`),
+  list: (params) => api.get('/users/users/', { params }),
+  follow: (id) => api.post(`/users/users/${id}/follow/`),
+  unfollow: (id) => api.post(`/users/users/${id}/unfollow/`),
 };
 
-// Posts
 export const postAPI = {
-  getFeed: () => api.get('/posts/'),
-  createPost: (data) => api.post('/posts/', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  getPost: (id) => api.get(`/posts/${id}/`),
-  updatePost: (id, data) => api.put(`/posts/${id}/`, data),
-  deletePost: (id) => api.delete(`/posts/${id}/`),
-  getUserPosts: (username) => api.get(`/posts/user/${username}/`),
-  likePost: (id) => api.post(`/posts/${id}/like/`),
-  unlikePost: (id) => api.delete(`/posts/${id}/unlike/`),
-  getPostLikes: (id) => api.get(`/posts/${id}/likes/`),
-  getPostComments: (id) => api.get(`/posts/${id}/comments/`),
-  createComment: (postId, data) => api.post(`/posts/${postId}/comments/`, data),
-  updateComment: (id, data) => api.put(`/posts/comments/${id}/`, data),
-  deleteComment: (id) => api.delete(`/posts/comments/${id}/`),
-  getCommentReplies: (id) => api.get(`/posts/comments/${id}/replies/`),
+  feed: (page = 1) => api.get('/posts/posts/', { params: { page } }),
+  create: (formData) => api.post('/posts/posts/', formData),
+  update: (id, data) => api.patch(`/posts/posts/${id}/`, data),
+  remove: (id) => api.delete(`/posts/posts/${id}/`),
+  like: (id) => api.post(`/posts/posts/${id}/like/`),
+  unlike: (id) => api.post(`/posts/posts/${id}/unlike/`),
+  comments: (id, page = 1) => api.get(`/posts/posts/${id}/comments/`, { params: { page } }),
 };
 
-// Stories
+export const commentAPI = {
+  create: (data) => api.post('/posts/comments/', data),
+  remove: (id) => api.delete(`/posts/comments/${id}/`),
+};
+
 export const storyAPI = {
-  getStories: () => api.get('/stories/'),
-  createStory: (data) => api.post('/stories/', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  getStory: (id) => api.get(`/stories/${id}/`),
-  deleteStory: (id) => api.delete(`/stories/${id}/`),
-  getUserStories: (username) => api.get(`/stories/user/${username}/`),
-  viewStory: (id) => api.post(`/stories/${id}/view/`),
-  getStoryViewers: (id) => api.get(`/stories/${id}/viewers/`),
+  list: () => api.get('/stories/'),
 };
 
-// Notifications
 export const notificationAPI = {
-  getNotifications: () => api.get('/notifications/'),
-  getUnreadNotifications: () => api.get('/notifications/unread/'),
-  getNotificationCount: () => api.get('/notifications/count/'),
-  markAsRead: (id) => api.patch(`/notifications/${id}/read/`),
-  markAllAsRead: () => api.patch('/notifications/mark-all-read/'),
-  deleteNotification: (id) => api.delete(`/notifications/${id}/delete/`),
+  list: (params) => api.get('/notifications/', { params }),
+  markRead: (id) => api.patch(`/notifications/${id}/`, { is_read: true }),
+  markAllRead: () => api.post('/notifications/mark-all-read/'),
 };
+
+export function errorMessage(error, fallback = 'Something went wrong. Please try again.') {
+  const data = error?.response?.data;
+  if (!data) return fallback;
+  if (typeof data === 'string') return fallback;
+  if (data.detail) return data.detail;
+  const first = Object.values(data).flat()[0];
+  return typeof first === 'string' ? first : fallback;
+}

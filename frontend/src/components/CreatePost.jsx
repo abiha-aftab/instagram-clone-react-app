@@ -1,133 +1,95 @@
-import { useState } from 'react';
-import { postAPI } from '../api';
-import './CreatePost.css';
+import { useEffect, useRef, useState } from 'react';
+import { errorMessage, postAPI } from '../api';
+import { validateImage } from '../lib/upload';
 
-const CreatePost = ({ onClose, onSuccess }) => {
-  const [image, setImage] = useState(null);
+export default function CreatePost({ onClose, onCreated }) {
+  const dialogRef = useRef(null);
+  const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
-  const [isScheduled, setIsScheduled] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImage(file);
-      setPreview(URL.createObjectURL(file));
-    }
-  };
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal?.();
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!image) {
-      setError('Please select an image');
+  useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
+
+  function chooseFile(event) {
+    const chosen = event.target.files[0];
+    const problem = validateImage(chosen);
+    setError(problem ?? '');
+    setFile(problem ? null : chosen);
+    setPreview(problem ? null : URL.createObjectURL(chosen));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    const problem = validateImage(file);
+    if (problem) {
+      setError(problem);
       return;
     }
+    const form = new FormData();
+    form.append('image', file);
+    form.append('title', title.trim());
+    form.append('caption', caption.trim());
+    if (scheduledFor) form.append('scheduled_for', new Date(scheduledFor).toISOString());
 
-    if (isScheduled && !scheduledTime) {
-      setError('Please select a scheduled time');
-      return;
-    }
-
-    setLoading(true);
+    setSaving(true);
     setError('');
-
-    const formData = new FormData();
-    formData.append('image', image);
-    formData.append('caption', caption);
-    formData.append('is_scheduled', isScheduled);
-    if (isScheduled && scheduledTime) {
-      formData.append('scheduled_time', new Date(scheduledTime).toISOString());
-    }
-
     try {
-      await postAPI.createPost(formData);
-      onSuccess();
+      const { data } = await postAPI.create(form);
+      onCreated(data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create post');
+      setError(errorMessage(err, 'Could not publish the post.'));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  };
+  }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Create New Post</h2>
-          <button onClick={onClose} className="close-button">×</button>
+    <dialog ref={dialogRef} className="sheet" aria-labelledby="create-post-title" onClose={onClose}>
+      <form onSubmit={submit} className="stack">
+        <h2 id="create-post-title">New post</h2>
+
+        <label className="field">
+          <span>Photo</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={chooseFile} />
+        </label>
+        {preview && <img src={preview} alt="Preview of the chosen photo" className="sheet-preview" />}
+
+        <label className="field">
+          <span>Title</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={2} maxLength={255} />
+        </label>
+        <label className="field">
+          <span>Caption</span>
+          <textarea value={caption} onChange={(event) => setCaption(event.target.value)} rows={3} required />
+        </label>
+        <label className="field">
+          <span>Publish later (optional)</span>
+          <input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} />
+        </label>
+
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="row-end">
+          <button type="button" className="btn btn-quiet" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? 'Publishing…' : scheduledFor ? 'Schedule' : 'Publish'}
+          </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="create-post-form">
-          <div className="image-upload">
-            {preview ? (
-              <img src={preview} alt="Preview" className="image-preview" />
-            ) : (
-              <label className="upload-label">
-                <span>📷 Choose Image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  hidden
-                />
-              </label>
-            )}
-          </div>
-
-          <textarea
-            placeholder="Write a caption..."
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            className="caption-input"
-            rows="4"
-          />
-
-          <div className="schedule-section">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={isScheduled}
-                onChange={(e) => setIsScheduled(e.target.checked)}
-              />
-              Schedule post
-            </label>
-
-            {isScheduled && (
-              <input
-                type="datetime-local"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                className="datetime-input"
-              />
-            )}
-          </div>
-
-          {error && <div className="error-text">{error}</div>}
-
-          <div className="form-actions">
-            <button
-              type="button"
-              onClick={onClose}
-              className="cancel-button"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !image}
-              className="submit-button"
-            >
-              {loading ? 'Posting...' : 'Post'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </dialog>
   );
-};
-
-export default CreatePost;
+}

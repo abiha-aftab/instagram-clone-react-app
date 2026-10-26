@@ -1,100 +1,128 @@
-import { useState, useEffect } from 'react';
-import { postAPI } from '../api';
-import { formatRelativeTime } from '../utils/helpers';
-import './CommentSection.css';
+import { useCallback, useState } from 'react';
+import { commentAPI, errorMessage, postAPI } from '../api';
+import { useAuth } from '../hooks/useAuth';
+import { usePagedList } from '../hooks/usePagedList';
+import { formatRelativeTime } from '../lib/format';
 
-const CommentSection = ({ postId }) => {
-  const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
-  const [replyTo, setReplyTo] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetchComments();
-  }, [postId]);
-
-  const fetchComments = async () => {
-    try {
-      const response = await postAPI.getPostComments(postId);
-      setComments(response.data.results || response.data);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-
-    setLoading(true);
-    try {
-      await postAPI.createComment(postId, {
-        text: newComment,
-        parent: replyTo,
-      });
-      
-      setNewComment('');
-      setReplyTo(null);
-      fetchComments();
-    } catch (error) {
-      console.error('Error creating comment:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+function Comment({ comment, canDelete, onDelete, onReply }) {
   return (
-    <div className="comment-section">
-      <div className="comments-list">
-        {comments.map((comment) => (
-          <div key={comment.id} className="comment">
-            <div className="comment-header">
-              <span className="comment-username">{comment.user.username}</span>
-              <span className="comment-time">{formatRelativeTime(comment.created_at)}</span>
-            </div>
-            <p className="comment-text">{comment.text}</p>
-            {comment.reply_count > 0 && (
-              <button 
-                className="view-replies"
-                onClick={() => {/* TODO: Load replies */}}
-              >
-                View {comment.reply_count} {comment.reply_count === 1 ? 'reply' : 'replies'}
-              </button>
-            )}
-            <button 
-              className="reply-button"
-              onClick={() => setReplyTo(comment.id)}
-            >
-              Reply
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <form onSubmit={handleSubmit} className="comment-form">
-        {replyTo && (
-          <div className="reply-indicator">
-            Replying to comment
-            <button onClick={() => setReplyTo(null)}>Cancel</button>
-          </div>
+    <div className="comment">
+      <p>
+        <strong>{comment.username}</strong> {comment.text}
+      </p>
+      <p className="muted small comment-meta">
+        <time dateTime={comment.created_at}>{formatRelativeTime(comment.created_at)}</time>
+        {onReply && (
+          <button type="button" className="link-button" onClick={() => onReply(comment)}>
+            Reply
+          </button>
         )}
-        <input
-          type="text"
-          placeholder="Add a comment..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          className="comment-input"
-        />
-        <button 
-          type="submit" 
-          disabled={loading || !newComment.trim()}
-          className="comment-submit"
-        >
-          Post
-        </button>
-      </form>
+        {canDelete && (
+          <button type="button" className="link-button" onClick={() => onDelete(comment.id)}>
+            Delete
+          </button>
+        )}
+      </p>
     </div>
   );
-};
+}
 
-export default CommentSection;
+export default function CommentSection({ postId }) {
+  const { user } = useAuth();
+  const fetchPage = useCallback((page) => postAPI.comments(postId, page), [postId]);
+  const { items, hasMore, status, loadMore, reload } = usePagedList(fetchPage);
+  const [text, setText] = useState('');
+  const [replyTo, setReplyTo] = useState(null);
+  const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!text.trim()) return;
+    setSending(true);
+    setError('');
+    try {
+      await commentAPI.create({ post: postId, text: text.trim(), parent: replyTo?.id ?? null });
+      setText('');
+      setReplyTo(null);
+      reload();
+    } catch (err) {
+      setError(errorMessage(err, 'Could not post your comment.'));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function remove(id) {
+    try {
+      await commentAPI.remove(id);
+      reload();
+    } catch (err) {
+      setError(errorMessage(err, 'Could not delete the comment.'));
+    }
+  }
+
+  const ownsComment = (comment) => comment.user === user?.id;
+
+  return (
+    <section className="comments" aria-label="Comments">
+      {status === 'error' && <p className="form-error">Comments could not be loaded.</p>}
+      {status === 'ready' && items.length === 0 && <p className="muted small">No comments yet.</p>}
+      <ul className="comment-list">
+        {items.map((comment) => (
+          <li key={comment.id}>
+            <Comment
+              comment={comment}
+              canDelete={ownsComment(comment)}
+              onDelete={remove}
+              onReply={setReplyTo}
+            />
+            {comment.replies.length > 0 && (
+              <ul className="reply-list">
+                {comment.replies.map((reply) => (
+                  <li key={reply.id}>
+                    <Comment comment={reply} canDelete={ownsComment(reply)} onDelete={remove} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+      {hasMore && (
+        <button type="button" className="link-button" onClick={loadMore} disabled={status === 'loading'}>
+          Older comments
+        </button>
+      )}
+
+      <form className="comment-form" onSubmit={submit}>
+        {replyTo && (
+          <p className="muted small">
+            Replying to {replyTo.username}{' '}
+            <button type="button" className="link-button" onClick={() => setReplyTo(null)}>
+              Cancel
+            </button>
+          </p>
+        )}
+        <label className="visually-hidden" htmlFor={`comment-${postId}`}>
+          Add a comment
+        </label>
+        <input
+          id={`comment-${postId}`}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Add a comment…"
+          maxLength={1000}
+        />
+        <button type="submit" className="btn" disabled={sending || !text.trim()}>
+          Post
+        </button>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+      </form>
+    </section>
+  );
+}

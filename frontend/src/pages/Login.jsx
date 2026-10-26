@@ -1,89 +1,67 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import './Auth.css';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { errorMessage } from '../api';
+import { useAuth } from '../hooks/useAuth';
+import AuthLayout from './AuthLayout';
 
-const Login = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+export default function Login() {
+  const { user, login } = useAuth();
   const navigate = useNavigate();
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  if (user) return <Navigate to="/" replace />;
+
+  const update = (event) => setForm({ ...form, [event.target.name]: event.target.value });
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
     setError('');
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    const result = await login(formData);
-    
-    if (result.success) {
+    try {
+      await login(form);
       navigate('/');
-    } else {
-      setError(result.error);
+    } catch (err) {
+      setError(errorMessage(err, 'Login failed.'));
+      setBusy(false);
     }
-    
-    setLoading(false);
-  };
+  }
 
   return (
-    <div className="auth-container">
-      <div className="auth-box">
-        <h1 className="auth-title">InstaCham</h1>
-        
-        <form onSubmit={handleSubmit} className="auth-form">
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            className="auth-input"
-          />
-          
+    <AuthLayout
+      title="Log in"
+      footer={
+        <>
+          New here? <Link to="/register">Create an account</Link>
+        </>
+      }
+    >
+      <form className="stack" onSubmit={submit}>
+        <label className="field">
+          <span>Email</span>
+          <input type="email" name="email" autoComplete="email" value={form.email} onChange={update} required />
+        </label>
+        <label className="field">
+          <span>Password</span>
           <input
             type="password"
             name="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={handleChange}
+            autoComplete="current-password"
+            value={form.password}
+            onChange={update}
             required
-            className="auth-input"
           />
-
-          {error && <div className="auth-error">{error}</div>}
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="auth-button"
-          >
-            {loading ? 'Logging in...' : 'Log In'}
-          </button>
-        </form>
-
-        <div className="auth-divider">
-          <span>OR</span>
-        </div>
-
-        <div className="auth-signup">
-          Don't have an account? <Link to="/register">Sign up</Link>
-        </div>
-      </div>
-    </div>
+        </label>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn btn-primary btn-wide" disabled={busy}>
+          {busy ? 'Logging in…' : 'Log in'}
+        </button>
+      </form>
+    </AuthLayout>
   );
-};
-
-export default Login;
+}

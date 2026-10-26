@@ -1,159 +1,91 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import './Auth.css';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { errorMessage } from '../api';
+import { useAuth } from '../hooks/useAuth';
+import AuthLayout from './AuthLayout';
 
-const Register = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    username: '',
-    password: '',
-    password_confirm: '',
-    first_name: '',
-    last_name: '',
-  });
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+export default function Register() {
+  const { user, register } = useAuth();
   const navigate = useNavigate();
+  const [form, setForm] = useState({ email: '', username: '', password: '', confirm: '' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    // Clear error for this field
-    if (errors[e.target.name]) {
-      setErrors({ ...errors, [e.target.name]: '' });
-    }
-  };
+  if (user) return <Navigate to="/" replace />;
 
-  const validateForm = () => {
-    const newErrors = {};
+  const update = (event) => setForm({ ...form, [event.target.name]: event.target.value });
 
-    if (formData.password !== formData.password_confirm) {
-      newErrors.password_confirm = 'Passwords do not match';
-    }
-
-    if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
+  async function submit(event) {
+    event.preventDefault();
+    if (form.password !== form.confirm) {
+      setError('The passwords do not match.');
       return;
     }
-
-    setLoading(true);
-    setErrors({});
-
-    const result = await register(formData);
-    
-    if (result.success) {
+    setBusy(true);
+    setError('');
+    try {
+      await register(form);
       navigate('/');
-    } else {
-      setErrors(result.error);
+    } catch (err) {
+      setError(errorMessage(err, 'Registration failed.'));
+      setBusy(false);
     }
-    
-    setLoading(false);
-  };
+  }
 
   return (
-    <div className="auth-container">
-      <div className="auth-box">
-        <h1 className="auth-title">InstaCham</h1>
-        <p className="auth-subtitle">Sign up to see photos from your friends</p>
-        
-        <form onSubmit={handleSubmit} className="auth-form">
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            className="auth-input"
-          />
-          {errors.email && <div className="auth-error">{errors.email}</div>}
-
-          <input
-            type="text"
-            name="username"
-            placeholder="Username"
-            value={formData.username}
-            onChange={handleChange}
-            required
-            className="auth-input"
-          />
-          {errors.username && <div className="auth-error">{errors.username}</div>}
-
-          <input
-            type="text"
-            name="first_name"
-            placeholder="First Name (optional)"
-            value={formData.first_name}
-            onChange={handleChange}
-            className="auth-input"
-          />
-
-          <input
-            type="text"
-            name="last_name"
-            placeholder="Last Name (optional)"
-            value={formData.last_name}
-            onChange={handleChange}
-            className="auth-input"
-          />
-
+    <AuthLayout
+      title="Create an account"
+      footer={
+        <>
+          Already registered? <Link to="/login">Log in</Link>
+        </>
+      }
+    >
+      <form className="stack" onSubmit={submit}>
+        <label className="field">
+          <span>Email</span>
+          <input type="email" name="email" autoComplete="email" value={form.email} onChange={update} required />
+        </label>
+        <label className="field">
+          <span>Username</span>
+          <input name="username" autoComplete="username" value={form.username} onChange={update} required />
+        </label>
+        <label className="field">
+          <span>Password</span>
           <input
             type="password"
             name="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={handleChange}
+            autoComplete="new-password"
+            aria-describedby="password-rules"
+            value={form.password}
+            onChange={update}
             required
-            className="auth-input"
+            minLength={8}
           />
-          {errors.password && <div className="auth-error">{errors.password}</div>}
-
+        </label>
+        <p id="password-rules" className="muted small">
+          At least 8 characters with upper and lower case, a digit and a symbol.
+        </p>
+        <label className="field">
+          <span>Confirm password</span>
           <input
             type="password"
-            name="password_confirm"
-            placeholder="Confirm Password"
-            value={formData.password_confirm}
-            onChange={handleChange}
+            name="confirm"
+            autoComplete="new-password"
+            value={form.confirm}
+            onChange={update}
             required
-            className="auth-input"
           />
-          {errors.password_confirm && (
-            <div className="auth-error">{errors.password_confirm}</div>
-          )}
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="auth-button"
-          >
-            {loading ? 'Signing up...' : 'Sign Up'}
-          </button>
-        </form>
-
-        <div className="auth-divider">
-          <span>OR</span>
-        </div>
-
-        <div className="auth-signup">
-          Have an account? <Link to="/login">Log in</Link>
-        </div>
-      </div>
-    </div>
+        </label>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn btn-primary btn-wide" disabled={busy}>
+          {busy ? 'Creating account…' : 'Create account'}
+        </button>
+      </form>
+    </AuthLayout>
   );
-};
-
-export default Register;
+}
