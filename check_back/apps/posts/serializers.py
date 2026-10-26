@@ -10,7 +10,7 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ['id', 'title', 'user', 'caption', 'image', 'scheduled_for', 'created_at', 'is_published', 'likes_count', 'comments_count', 'is_liked']
-        read_only_fields = ['id', 'created_at', 'is_published'] 
+        read_only_fields = ['id', 'user', 'created_at', 'is_published']
 
     def get_likes_count(self, obj):
         return Like.objects.filter(post=obj).count()
@@ -29,11 +29,6 @@ class PostSerializer(serializers.ModelSerializer):
         if value and value < timezone.now():
             raise serializers.ValidationError("Scheduled time must be in the future.")
         return value
-    
-    def create(self, validated_data):
-        request = self.context.get('request')
-        user = request.user if request.user else None
-        return Post.objects.create(user=user, **validated_data)
 
 
 class LikeSerializer(serializers.ModelSerializer):

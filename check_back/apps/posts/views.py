@@ -17,7 +17,7 @@ class PostViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user if self.request.user else None)
+        serializer.save(user=self.request.user)
     
     @action(detail=True, methods=['post'], url_path='like')
     def like_post(self, request, pk=None):

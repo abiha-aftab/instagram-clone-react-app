@@ -11,9 +11,7 @@ from core.tasks import send_push_notification
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         # Create a profile for the new user
-        Profile.objects.create(user=instance)
-        # TODO: trigger an alert or log creation
-        print(f"New profile created for {instance.email}")
+        Profile.objects.create(user=instance, nickname=instance.username)
 
 @receiver(post_save, sender=Follow)
 def create_follow_notification(sender, instance, created, **kwargs):
@@ -37,7 +35,7 @@ def create_follow_notification(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender=Like)
 def create_like_notification(sender, instance, created, **kwargs):
-    if created:
+    if created and instance.user_id != instance.post.user_id:
         message = f"{instance.user.username} liked your post '{instance.post.title}'."
         Notification.objects.create(
             from_user=instance.user,
@@ -59,6 +57,8 @@ def create_comment_notification(sender, instance, created, **kwargs):
             # Comment on post
             to_user = instance.post.user
             message = f"{instance.user.username} commented on your post '{instance.post.title}'."
+        if to_user == instance.user:
+            return
         Notification.objects.create(
             from_user=instance.user,
             to_user=to_user,

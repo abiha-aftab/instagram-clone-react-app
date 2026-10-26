@@ -4,6 +4,8 @@ from django.conf import settings
 from .models import PushSubscription
 
 def send_web_push(user, payload):
+    if not settings.WEBPUSH_SETTINGS['VAPID_PRIVATE_KEY']:
+        return
     subs = PushSubscription.objects.filter(user=user)
 
     for sub in subs:

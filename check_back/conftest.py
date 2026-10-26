@@ -1,7 +1,10 @@
+import io
 import shutil
 import tempfile
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.test import APIClient
 
 
@@ -42,3 +45,13 @@ def auth_client(make_user):
         return client
 
     return _auth_client
+
+
+@pytest.fixture
+def png_upload():
+    def _png_upload(name='photo.png', size=(8, 8)):
+        buffer = io.BytesIO()
+        Image.new('RGB', size, (200, 90, 40)).save(buffer, format='PNG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')
+
+    return _png_upload

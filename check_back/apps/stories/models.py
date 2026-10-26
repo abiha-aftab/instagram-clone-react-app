@@ -1,6 +1,8 @@
 from datetime import timedelta
 from django.db import models
-# Create your models here.
+from django.utils import timezone
+
+
 class Story(models.Model):
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='stories')    
     title = models.CharField(max_length=200)
@@ -21,7 +23,7 @@ class Story(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
-            self.expires_at = self.created_at + timedelta(hours=24) 
+            self.expires_at = timezone.now() + timedelta(hours=24)
         super().save(*args, **kwargs)
 
 
