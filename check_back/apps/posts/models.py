@@ -1,18 +1,24 @@
+from django.core.exceptions import ValidationError
+from django.core.validators import MinLengthValidator
 from django.db import models
-from django.core.validators import MinLengthValidator as Mi
 from django.utils import timezone
-# Create your models here.
+
+from core.validators import image_extension_validator, image_size_validator
+
 
 def validate_scheduled_for(value):
     if value and value < timezone.now():
-        raise models.ValidationError("Scheduled time must be in the future.")
-    
+        raise ValidationError("Scheduled time must be in the future.")
+
 
 class Post(models.Model):
-    title = models.CharField(max_length=255, validators=[Mi(2)])
+    title = models.CharField(max_length=255, validators=[MinLengthValidator(2)])
     user = models.ForeignKey('users.User', on_delete=models.CASCADE)
     caption = models.TextField()
-    image = models.ImageField(upload_to='posts/', max_length=255, blank=True, null=True)
+    image = models.ImageField(
+        upload_to='posts/', max_length=255, blank=True, null=True,
+        validators=[image_extension_validator, image_size_validator],
+    )
     scheduled_for = models.DateTimeField(null=True, blank=True, validators=[validate_scheduled_for])
     created_at = models.DateTimeField(auto_now_add=True)
     is_published = models.BooleanField(default=False)

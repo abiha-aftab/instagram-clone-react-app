@@ -1,6 +1,7 @@
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
+from core.validators import validate_story_media
 
 
 class Story(models.Model):
@@ -8,7 +9,10 @@ class Story(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
     
-    media = models.FileField(upload_to='stories/', max_length=255, blank=True, null=True)
+    media = models.FileField(
+        upload_to='stories/', max_length=255, blank=True, null=True,
+        validators=[validate_story_media],
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()

@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
+from core.validators import image_extension_validator, image_size_validator
 # user manager for the custom user model for email base unique users
 
 
@@ -57,7 +58,10 @@ class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     nickname = models.CharField(max_length=50)
     bio = models.TextField(blank=True)
-    profile_image = models.ImageField(upload_to='avatars/', max_length=255, blank=True, null=True)
+    profile_image = models.ImageField(
+        upload_to='avatars/', max_length=255, blank=True, null=True,
+        validators=[image_extension_validator, image_size_validator],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
