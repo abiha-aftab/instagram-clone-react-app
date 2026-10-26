@@ -22,6 +22,8 @@ class PostViewSet(PaginatedActionsMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Post.objects.none()
         queryset = visible_posts(self.request.user)
         if self.action == 'list':
             # The feed shows scheduled posts only once their time has come.
@@ -65,6 +67,8 @@ class OwnPostViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Post.objects.none()
         return posts_with_stats(self.request.user).filter(user=self.request.user)
 
     def perform_create(self, serializer):

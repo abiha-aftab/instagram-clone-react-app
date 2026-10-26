@@ -14,6 +14,8 @@ class StoryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Story.objects.none()
         user = self.request.user
         return (
             Story.objects.select_related('user')

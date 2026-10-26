@@ -18,6 +18,8 @@ class NotificationViewSet(
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
         queryset = Notification.objects.filter(to_user=self.request.user).select_related('from_user')
         if self.request.query_params.get('unread') in ('1', 'true'):
             queryset = queryset.filter(is_read=False)
@@ -39,4 +41,6 @@ class PushSubscriptionViewSet(
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PushSubscription.objects.none()
         return PushSubscription.objects.filter(user=self.request.user).order_by('-created_at')

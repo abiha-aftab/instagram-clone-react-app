@@ -1,4 +1,5 @@
 import pytest
+from django.core.management import call_command
 from django.urls import reverse
 
 
@@ -24,3 +25,8 @@ def test_register_then_obtain_token(api_client):
     )
     assert response.status_code == 200
     assert {'access', 'refresh'} <= response.data.keys()
+
+
+@pytest.mark.django_db
+def test_openapi_schema_has_no_warnings(tmp_path):
+    call_command('spectacular', '--fail-on-warn', '--file', str(tmp_path / 'schema.yaml'))

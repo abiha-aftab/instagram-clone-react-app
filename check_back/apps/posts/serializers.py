@@ -1,4 +1,5 @@
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Comment, Like, Post
@@ -9,7 +10,7 @@ class AuthorSerializer(serializers.Serializer):
     username = serializers.CharField()
     avatar = serializers.SerializerMethodField()
 
-    def get_avatar(self, user):
+    def get_avatar(self, user) -> str | None:
         profile = getattr(user, 'profile', None)
         if not profile or not profile.profile_image:
             return None
@@ -33,7 +34,7 @@ class PostSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'created_at']
 
-    def get_is_published(self, obj):
+    def get_is_published(self, obj) -> bool:
         return obj.scheduled_for is None or obj.scheduled_for <= timezone.now()
 
     def validate_scheduled_for(self, value):
@@ -80,13 +81,14 @@ class CommentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
 
+    @extend_schema_field(ReplySerializer(many=True))
     def get_replies(self, obj):
         # Replies are one level deep, so a reply never has replies of its own.
         if obj.parent_id is not None:
             return []
         return ReplySerializer(obj.replies.all(), many=True, context=self.context).data
 
-    def get_replies_count(self, obj):
+    def get_replies_count(self, obj) -> int:
         if obj.parent_id is not None:
             return 0
         return len(obj.replies.all())
