@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+project_venv/
+venv/
+.venv/
+
+# Local data: never commit databases or uploaded media
+*.sqlite3
+db.sqlite3
+*.db
+media/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# The hiring brief is summarised in the README instead
+Test Project.pdf
+
+# Editors, OS, logs
+.vscode/
+.idea/
+.DS_Store
+*.log
+logs/
+tmp/
+*.bash
+
+# No hosted automation in this repo
+.github/
