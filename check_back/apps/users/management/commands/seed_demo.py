@@ -47,13 +47,18 @@ def render_scene(seed, size=900):
     dark, accent, light = PALETTES[seed % len(PALETTES)]
     image = Image.new('RGB', (size, size), light)
     draw = ImageDraw.Draw(image)
-    sun_x, sun_r = rng.randint(200, 700), rng.randint(70, 140)
-    draw.ellipse([sun_x - sun_r, 220 - sun_r, sun_x + sun_r, 220 + sun_r], fill=accent)
+
+    def scaled(value):
+        return int(value * size / 900)
+
+    sun_x, sun_y, sun_r = scaled(rng.randint(200, 700)), scaled(220), scaled(rng.randint(70, 140))
+    draw.ellipse([sun_x - sun_r, sun_y - sun_r, sun_x + sun_r, sun_y + sun_r], fill=accent)
+    step = scaled(90)
     for layer in range(3):
-        base = 480 + layer * 130
+        base = scaled(480 + layer * 130)
         points = [(0, size)]
-        for x in range(0, size + 90, 90):
-            points.append((x, base + rng.randint(-60, 40)))
+        for x in range(0, size + step, step):
+            points.append((x, base + scaled(rng.randint(-60, 40))))
         points.append((size, size))
         draw.polygon(points, fill=dark if layer == 2 else (accent if layer == 1 else '#9aa5a0'))
     buffer = io.BytesIO()
